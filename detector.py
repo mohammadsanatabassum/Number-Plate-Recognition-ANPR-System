@@ -12,13 +12,18 @@ class PlateDetector:
         Extract text using EasyOCR's highly accurate AI text localization, 
         and return a tuple of (cropped_img, text).
         """
-        # Convert to grayscale for better contrast isolation
+        # Convert to grayscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
-        # OCR across the image natively, massively magnifying small plates for higher accuracy
-        # Added a strict character allowlist to force it to look for symbols it might otherwise skip
+        # Apply Adaptive Thresholding to force the image into pure black & white!
+        # This removes shadows and definitively sharpens ambiguous letter legs.
+        thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+        )
+        
+        # OCR across the binary image
         results = self.reader.readtext(
-            gray, 
+            thresh, 
             mag_ratio=3.0, 
             allowlist='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-.'
         )
