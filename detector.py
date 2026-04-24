@@ -12,8 +12,11 @@ class PlateDetector:
         Extract text using EasyOCR's highly accurate AI text localization, 
         and return a tuple of (cropped_img, text).
         """
-        # OCR across the entire image natively
-        results = self.reader.readtext(frame)
+        # Convert to grayscale for better contrast isolation
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        # OCR across the image natively, magnifying small plates for higher accuracy
+        results = self.reader.readtext(gray, mag_ratio=1.5)
         
         if len(results) == 0:
             return None, None
@@ -24,7 +27,8 @@ class PlateDetector:
         
         for bbox, text, prob in results:
             raw = text.replace(" ", "").upper()
-            valid_chars = [c for c in raw if c.isalnum()]
+            # Allow common license plate separating symbols
+            valid_chars = [c for c in raw if c.isalnum() or c in "-."]
             cleaned = "".join(valid_chars)
             
             # Plates usually have 4+ characters. 
