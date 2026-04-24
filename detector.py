@@ -1,6 +1,25 @@
 import cv2
 import numpy as np
 import easyocr
+import re
+
+def post_process_plate(text):
+    """
+    Apply domain-specific heuristics to fix fundamental OCR deep-learning limitations.
+    For example, Vietnam plates strictly follow: [2 digits][1 letter]-[3 digits].[2 digits].
+    """
+    if not text: return text
+    
+    # OCR natively confuses blocky 'A' fonts with '4' on low res images.
+    # Since the 3rd character must algebraically be a letter, we algorithmically force the repair:
+    text = re.sub(r'^(\d{2})4', r'\g<1>A', text)
+    
+    # OCR also commonly skips microscopic symbols (dashes/dots). 
+    # If the AI perfectly extracts the 8 alphanumeric characters, we mathematically inject the symbols back into their exact legal positions!
+    if re.match(r'^\d{2}[A-Z]\d{5}$', text):
+        text = f"{text[:3]}-{text[3:6]}.{text[6:]}"
+        
+    return text
 
 class PlateDetector:
     def __init__(self):
@@ -62,7 +81,7 @@ class PlateDetector:
                 
             if prob > best_confidence:
                 best_confidence = prob
-                best_cleaned_text = cleaned
+                best_cleaned_text = post_process_plate(cleaned)
                 
                 # Extract bounding box to generate the nice crop for UI
                 (tl, tr, br, bl) = bbox
