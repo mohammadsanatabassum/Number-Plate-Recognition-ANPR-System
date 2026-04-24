@@ -41,6 +41,14 @@ class PlateDetector:
         Extract text using EasyOCR's highly accurate AI text localization, 
         and return a tuple of (cropped_img, text).
         """
+        # CLOUD MEMORY OVERFLOW PROTECTION:
+        # Prevent 4K/huge images from exploding Ram when multiplied by mag_ratio=3.0
+        max_dimension = 1000
+        height, width = frame.shape[:2]
+        if width > max_dimension or height > max_dimension:
+            scaling_factor = max_dimension / float(max(height, width))
+            frame = cv2.resize(frame, None, fx=scaling_factor, fy=scaling_factor, interpolation=cv2.INTER_AREA)
+
         # Convert to grayscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
