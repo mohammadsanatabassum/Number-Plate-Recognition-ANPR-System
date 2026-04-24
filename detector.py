@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import easyocr
 import re
 
 def post_process_plate(text):
@@ -30,6 +29,10 @@ import os
 class PlateDetector:
     def __init__(self):
         print("Loading local EasyOCR AI weights...")
+        
+        # LAZY IMPORT: Prevent PyTorch from freezing the Streamlit Cloud 60-second boot health-checker!
+        import easyocr
+        
         # Force the absolute path to mathematically guarantee the cloud server finds the folder
         current_dir = os.path.dirname(os.path.abspath(__file__))
         model_dir = os.path.join(current_dir, 'model_weights')
