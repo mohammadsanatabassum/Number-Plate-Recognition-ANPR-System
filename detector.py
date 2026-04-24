@@ -21,13 +21,19 @@ def post_process_plate(text):
         
     return text
 
+import os
+
 class PlateDetector:
     def __init__(self):
         print("Loading local EasyOCR AI weights...")
+        # Force the absolute path to mathematically guarantee the cloud server finds the folder
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_dir = os.path.join(current_dir, 'model_weights')
+        
         self.reader = easyocr.Reader(
             ['en'], 
             download_enabled=False, 
-            model_storage_directory='model_weights'
+            model_storage_directory=model_dir
         )
         
     def detect_and_read_plate(self, frame):
