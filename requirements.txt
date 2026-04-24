@@ -3,3 +3,5 @@ easyocr
 imutils
 numpy
 matplotlib
+streamlit
+Pillow
