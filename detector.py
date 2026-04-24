@@ -35,6 +35,21 @@ class PlateDetector:
             if len(cleaned) < 4:
                 continue
                 
+            # Calculate mathematical aspect ratio of the text bounding box
+            (tl, tr, br, bl) = bbox
+            width = np.linalg.norm(np.array(tr) - np.array(tl))
+            height = np.linalg.norm(np.array(br) - np.array(tr))
+            
+            if height == 0: 
+                continue
+                
+            aspect_ratio = width / height
+            
+            # True license plates are distinctly horizontal rectangles 
+            # We filter out stacked text, tall phone numbers, or square signs
+            if aspect_ratio < 1.3 or aspect_ratio > 8.0:
+                continue
+                
             if prob > best_confidence:
                 best_confidence = prob
                 best_cleaned_text = cleaned
