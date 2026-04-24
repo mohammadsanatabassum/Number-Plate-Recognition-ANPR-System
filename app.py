@@ -29,7 +29,7 @@ def process_and_display_frame(frame, detector):
         st.success(f"### Detected Plate: **{text}**")
         col1, col2 = st.columns(2)
         with col1:
-            st.image(cropped_img, caption="Cropped Plate", use_container_width=True, clamp=True)
+            st.image(cropped_img, caption="Cropped Plate", clamp=True)
         with col2:
             img_filename = f"captures/{text}_{uuid.uuid4().hex[:6]}.jpg"
             cv2.imwrite(img_filename, frame)
@@ -56,7 +56,7 @@ def main():
         if file_ext in ['jpg', 'jpeg', 'png']:
             file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
             frame = cv2.imdecode(file_bytes, 1)
-            st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), caption="Uploaded Image", use_container_width=True)
+            st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), caption="Uploaded Image")
             with st.spinner('Scanning for license plates...'):
                 found = process_and_display_frame(frame, detector)
             if not found:
@@ -100,7 +100,7 @@ def main():
                         st.success(f"### Detected Plate in Video: **{text}**")
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.image(cropped_img, caption="Cropped Snapshot", use_container_width=True, clamp=True)
+                            st.image(cropped_img, caption="Cropped Snapshot", clamp=True)
                         with col2:
                             img_filename = f"captures/{text}_{uuid.uuid4().hex[:6]}.jpg"
                             cv2.imwrite(img_filename, frame)
@@ -125,7 +125,7 @@ def main():
             if df.empty:
                 st.info("No plates logged yet.")
             else:
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df)
             conn.close()
         except Exception as e:
             st.warning("Database is empty or could not be queried.")
