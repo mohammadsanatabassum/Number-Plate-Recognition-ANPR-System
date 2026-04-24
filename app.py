@@ -1,3 +1,11 @@
+import os
+# FATAL CLOUD CRASH FIX: Strictly lock CPU threading to 1 before PyTorch/OpenCV boot to prevent Streamlit Free Tier (1GB RAM limit) from instantly hitting Linux OOM-Kills!
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import streamlit as st
 import cv2
 import numpy as np
