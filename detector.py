@@ -10,15 +10,19 @@ def post_process_plate(text):
     """
     if not text: return text
     
-    # OCR natively confuses blocky 'A' fonts with '4' on low res images.
-    # Since the 3rd character must algebraically be a letter, we algorithmically force the repair:
-    text = re.sub(r'^(\d{2})4', r'\g<1>A', text)
+    # Strip out any random dots or dashes the AI hallucinated or skipped to get pure text
+    filtered = "".join(c for c in text if c.isalnum())
     
-    # OCR also commonly skips microscopic symbols (dashes/dots). 
-    # If the AI perfectly extracts the 8 alphanumeric characters, we mathematically inject the symbols back into their exact legal positions!
-    if re.match(r'^\d{2}[A-Z]\d{5}$', text):
-        text = f"{text[:3]}-{text[3:6]}.{text[6:]}"
-        
+    if len(filtered) >= 8:
+        # If the first two chars are numbers, and the 3rd is explicitly a '4', ALWAYS force it to 'A'
+        if filtered[:2].isdigit() and filtered[2] == '4':
+            filtered = filtered[:2] + 'A' + filtered[3:]
+            
+        # When we firmly have 8 pure alphanumeric characters matching the country code...
+        if len(filtered) == 8 and filtered[:2].isdigit() and filtered[2].isalpha():
+            # ...Mathematically surgically permanently overwrite it into the perfect format !!
+            return f"{filtered[:3]}-{filtered[3:6]}.{filtered[6:]}"
+            
     return text
 
 import os
