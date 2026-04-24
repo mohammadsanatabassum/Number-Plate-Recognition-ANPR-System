@@ -105,5 +105,22 @@ def main():
             if len(plates_found) == 0:
                 st.warning("No plates detected in this video.")
                 
+    st.markdown("---")
+    st.subheader("🗄️ Database Logs")
+    if st.checkbox("Show detection history"):
+        import sqlite3
+        import pandas as pd
+        
+        try:
+            conn = sqlite3.connect("plates.db")
+            df = pd.read_sql_query("SELECT id, plate_text, timestamp FROM plates ORDER BY timestamp DESC", conn)
+            if df.empty:
+                st.info("No plates logged yet.")
+            else:
+                st.dataframe(df, use_container_width=True)
+            conn.close()
+        except Exception as e:
+            st.warning("Database is empty or could not be queried.")
+
 if __name__ == '__main__':
     main()
