@@ -23,8 +23,12 @@ def post_process_plate(text):
 
 class PlateDetector:
     def __init__(self):
-        print("Initializing EasyOCR Model (may take a moment to download weights on first run...)")
-        self.reader = easyocr.Reader(['en'])
+        print("Loading local EasyOCR AI weights...")
+        self.reader = easyocr.Reader(
+            ['en'], 
+            download_enabled=False, 
+            model_storage_directory='model_weights'
+        )
         
     def detect_and_read_plate(self, frame):
         """
