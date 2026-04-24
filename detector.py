@@ -15,8 +15,13 @@ class PlateDetector:
         # Convert to grayscale for better contrast isolation
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
-        # OCR across the image natively, magnifying small plates for higher accuracy
-        results = self.reader.readtext(gray, mag_ratio=1.5)
+        # OCR across the image natively, massively magnifying small plates for higher accuracy
+        # Added a strict character allowlist to force it to look for symbols it might otherwise skip
+        results = self.reader.readtext(
+            gray, 
+            mag_ratio=3.0, 
+            allowlist='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-.'
+        )
         
         if len(results) == 0:
             return None, None
