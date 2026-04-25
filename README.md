@@ -9,20 +9,22 @@ app_port: 7860
 ---
 # 🚗 Automatic Number Plate Recognition (ANPR) System
 
-A complete, end-to-end Machine Learning pipeline utilizing PyTorch and Optical Character Recognition (OCR) to automatically detect, extract, and log vehicle license plates from both images and localized video streams.
+A complete, end-to-end Machine Learning pipeline utilizing a Dual-Stage Architecture (OpenCV Object Detection + PyTorch Deep Learning) to universally detect, exact-crop, and extract vehicle license plates from both arbitrary images and local video streams.
+
+[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Live%20Demo-blue)](https://huggingface.co/spaces/mohammadsana02/anpr)
 
 ## ✨ Features
-- **AI-Powered OCR Detection:** Utilizes `easyocr` (backed by PyTorch) to systematically scan frames, pinpointing alphanumeric structures regardless of high-angle warping or visual noise.
+- **Dual-Stage OCR Detection:** Utilizes an ultra-fast OpenCV `haarcascade` to physically isolate plate rectangles first, scaling them up before feeding ONLY the pure plate to the `easyocr` Neural Network. This bypasses structural noise and guarantees universal accuracy.
 - **Video & Image Uploads:** Full support for processing `.mp4`, `.avi`, `.jpg`, and `.png` files via the intuitive Streamlit Web UI.
 - **Historical SQLite Database:** Automatically logs all successfully detected plates, timestamps, and physical file-paths into a permanent `plates.db` local SQLite database.
-- **Headless Cloud Support:** Fully architected with `opencv-python-headless` to seamlessly support native deployment onto cloud architectures like Streamlit Community Cloud without `libGL` environment crashes.
-- **Interactive UI:** View the real-time processing logs and interrogate the database directly from the front-end interface!
+- **Headless Cloud Support:** Architected with a custom `Dockerfile` targeting Hugging Face Spaces (allocating 16GB RAM) utilizing `opencv-python-headless` for flawless remote rendering.
 
 ## ⚙️ Technologies Used
 - **Language:** Python 3.10+
-- **Computer Vision:** OpenCV (`opencv-python-headless`)
-- **Machine Learning / OCR:** EasyOCR + PyTorch
+- **Computer Vision:** OpenCV (`haarcascade_russian_plate_number.xml`)
+- **Machine Learning / Deep OCR:** EasyOCR + PyTorch CPU
 - **Web Framework:** Streamlit
+- **Containerization:** Docker
 - **Database:** SQLite3 + Pandas
 
 ## 💻 Local Installation & Setup
@@ -46,7 +48,6 @@ A complete, end-to-end Machine Learning pipeline utilizing PyTorch and Optical C
    ```bash
    pip install -r requirements.txt
    ```
-   *Note: EasyOCR will automatically download its pre-trained Neural Network weights (approx 100MB) directly into memory upon the very first run.*
 
 ## 🚀 Usage
 
@@ -59,9 +60,9 @@ streamlit run app.py
 This will spin up a local server at `http://localhost:8501`. 
 1. Navigate to the page.
 2. Upload a clear picture (or video) of a car.
-3. The AI will instantly isolate the number plate, cross-check the characters, heavily crop the bounding box, display the result, and log it securely into `plates.db`.
+3. The HaarCascade will physically cut out the license plate, drastically upscale it, and the AI will extract the characters exactly as they appear!
 
-## ☁️ Cloud Deployment Notes
-This application is strictly optimized for **Streamlit Community Cloud**. 
-Simply link this repository to `share.streamlit.io` for an instant 1-click deployment! 
-*(Warning: Cloud providers utilize Ephemeral Storage. The local `plates.db` and the corresponding `/captures/` folder will ultimately reset or purge whenever the specific cloud container spins down to sleep).*
+## ☁️ Cloud Deployment
+Due to the heavy RAM requirements of the PyTorch Deep Learning model (`>1GB`), this application is architected to be deployed on **Hugging Face Spaces** via the embedded `Dockerfile`.
+Streamlit Community Cloud is **not** supported, as the 1GB RAM constraint will forcibly crash the underlying Linux kernel with an OOM Kill.
+To deploy, simply link this Github Repository directly to a new Hugging Face Docker Space!
