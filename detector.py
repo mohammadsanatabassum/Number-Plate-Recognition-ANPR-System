@@ -7,6 +7,11 @@ import os
 
 def post_process_plate(text):
     text = re.sub(r'[^A-Z0-9]', '', text.upper())
+    
+    # Strip hallucinated leading and trailing letters caused by plate screws/shadows
+    text = re.sub(r'^[A-Z]+', '', text)
+    text = re.sub(r'[A-Z]+$', '', text)
+
     # Advanced logic to surgically repair OCR ambiguities
     if len(text) == 8:
         if text[2] == '4':
