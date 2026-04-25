@@ -65,11 +65,14 @@ class PlateDetector:
             cleaned_plate = post_process_plate(raw_text)
             
             # Standard license plates globally are virtually never under 4 alphanumeric lengths
+            # STRICT FILTER: Discard any reading heavily corrupted by noise (under 60% strict confidence)
             if len(cleaned_plate.replace(" ", "").replace("-", "")) >= 4:
-                highest_conf_text = cleaned_plate
-                final_accuracy = sum(conf_scores) / len(conf_scores) if conf_scores else 0.0
-                best_box = (x, y, w, h)
-                break
+                temp_accuracy = sum(conf_scores) / len(conf_scores) if conf_scores else 0.0
+                if temp_accuracy >= 0.60:
+                    highest_conf_text = cleaned_plate
+                    final_accuracy = temp_accuracy
+                    best_box = (x, y, w, h)
+                    break
                 
         # If the HaarCascade successfully identified the isolated rectangle:
         if best_box is not None:
