@@ -1,5 +1,5 @@
 ---
-title: Anpr System 🚗
+title: Anpr System
 emoji: 🚀
 colorFrom: blue
 colorTo: indigo
