@@ -12,6 +12,13 @@ def post_process_plate(text):
     text = re.sub(r'^[A-Z]+', '', text)
     text = re.sub(r'[A-Z]+$', '', text)
 
+    # Core Structural Clipping: 
+    # AI often reads the bolt on the left as a '1'. We use RegEx to lock onto the actual Vietnamese plate pattern.
+    # Pattern: 2 Digits + 1-2 Letters (we allow '4' as a letter because AI constantly confuses A for 4) + 4-5 Digits
+    match = re.search(r'(\d{2}[A-Z4]{1,2}\d{4,5})', text)
+    if match:
+        text = match.group(1)
+
     # Advanced logic to surgically repair OCR ambiguities
     if len(text) >= 3 and text[2] == '4':
         text = text[:2] + 'A' + text[3:]
