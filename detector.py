@@ -1,126 +1,70 @@
 import cv2
 import numpy as np
+import pytesseract
+import imutils
 import re
+import os
 
 def post_process_plate(text):
-    """
-    Apply domain-specific heuristics to fix fundamental OCR deep-learning limitations.
-    For example, Vietnam plates strictly follow: [2 digits][1 letter]-[3 digits].[2 digits].
-    """
-    if not text: return text
-    
-    # Strip out any random dots or dashes the AI hallucinated or skipped to get pure text
-    filtered = "".join(c for c in text if c.isalnum())
-    
-    if len(filtered) >= 8:
-        # If the first two chars are numbers, and the 3rd is explicitly a '4', ALWAYS force it to 'A'
-        if filtered[:2].isdigit() and filtered[2] == '4':
-            filtered = filtered[:2] + 'A' + filtered[3:]
-            
-        # When we firmly have 8 pure alphanumeric characters matching the country code...
-        if len(filtered) == 8 and filtered[:2].isdigit() and filtered[2].isalpha():
-            # ...Mathematically surgically permanently overwrite it into the perfect format !!
-            return f"{filtered[:3]}-{filtered[3:6]}.{filtered[6:]}"
-            
+    text = re.sub(r'[^A-Z0-9]', '', text.upper())
+    # Advanced logic to surgically repair OCR ambiguities
+    if len(text) == 8:
+        if text[2] == '4':
+            text = text[:2] + 'A' + text[3:]
+        text = text[:3] + '-' + text[3:6] + '.' + text[6:]
+    elif len(text) == 9:
+        if text[2] == '4':
+            text = text[:2] + 'A' + text[3:]
     return text
-
-import os
 
 class PlateDetector:
     def __init__(self):
-        print("Loading local EasyOCR AI weights...")
-        
-        # LAZY IMPORT: Prevent PyTorch from freezing the Streamlit Cloud 60-second boot health-checker!
-        import easyocr
-        
-        # Force the absolute path to mathematically guarantee the cloud server finds the folder
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        model_dir = os.path.join(current_dir, 'model_weights')
-        
-        self.reader = easyocr.Reader(
-            ['en'], 
-            download_enabled=False, 
-            model_storage_directory=model_dir
-        )
-        
-    def detect_and_read_plate(self, frame):
-        """
-        Extract text using EasyOCR's highly accurate AI text localization, 
-        and return a tuple of (cropped_img, text).
-        """
-        # CLOUD MEMORY OVERFLOW PROTECTION:
-        # Prevent 4K/huge images from exploding Ram when multiplied by mag_ratio=3.0
-        max_dimension = 1000
-        height, width = frame.shape[:2]
-        if width > max_dimension or height > max_dimension:
-            scaling_factor = max_dimension / float(max(height, width))
-            frame = cv2.resize(frame, None, fx=scaling_factor, fy=scaling_factor, interpolation=cv2.INTER_AREA)
+        print("Initialized ultra-lightweight Tesseract engine.")
 
-        # Convert to grayscale
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    def detect_and_read_plate(self, img_array):
+        # Memory-safe scaling
+        h, w = img_array.shape[:2]
+        max_dimension = 1000
+        if max(h, w) > max_dimension:
+            scale = max_dimension / max(h, w)
+            img_array = cv2.resize(img_array, (int(w * scale), int(h * scale)))
+
+        gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
+        bfilter = cv2.bilateralFilter(gray, 11, 17, 17)
+        edged = cv2.Canny(bfilter, 30, 200)
+
+        keypoints = cv2.findContours(edged.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours = imutils.grab_contours(keypoints)
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
         
-        # Apply Adaptive Thresholding to force the image into pure black & white!
-        # This removes shadows and definitively sharpens ambiguous letter legs.
-        thresh = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-        )
+        location = None
+        for contour in contours:
+            approx = cv2.approxPolyDP(contour, 10, True)
+            if len(approx) == 4:
+                location = approx
+                break
+
+        if location is None:
+            return img_array, None
+
+        mask = np.zeros(gray.shape, np.uint8)
+        cv2.drawContours(mask, [location], 0, 255, -1)
         
-        # OCR across the binary image
-        results = self.reader.readtext(
-            thresh, 
-            mag_ratio=3.0, 
-            allowlist='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-.'
-        )
+        (x, y) = np.where(mask == 255)
+        (x1, y1) = (np.min(x), np.min(y))
+        (x2, y2) = (np.max(x), np.max(y))
+        cropped_image = gray[x1:x2+1, y1:y2+1]
         
-        if len(results) == 0:
-            return None, None
-            
-        best_cleaned_text = None
-        best_cropped = None
-        best_confidence = -1
+        # Binarize output mathematically for Tesseract because it struggles with gray shadows
+        _, thresh = cv2.threshold(cropped_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # PyTesseract structural execution (--psm 8 strictly forces a single word/line)
+        text = pytesseract.image_to_string(thresh, config='--psm 8')
         
-        for bbox, text, prob in results:
-            raw = text.replace(" ", "").upper()
-            # Allow common license plate separating symbols
-            valid_chars = [c for c in raw if c.isalnum() or c in "-."]
-            cleaned = "".join(valid_chars)
+        # Correctly validate formatting
+        final_plate = post_process_plate(text)
+        if len(final_plate) < 2:
+            return img_array, None
             
-            # Plates usually have 4+ characters. 
-            if len(cleaned) < 4:
-                continue
-                
-            # Calculate mathematical aspect ratio of the text bounding box
-            (tl, tr, br, bl) = bbox
-            width = np.linalg.norm(np.array(tr) - np.array(tl))
-            height = np.linalg.norm(np.array(br) - np.array(tr))
-            
-            if height == 0: 
-                continue
-                
-            aspect_ratio = width / height
-            
-            # True license plates are distinctly horizontal rectangles 
-            # We filter out stacked text, tall phone numbers, or square signs
-            if aspect_ratio < 1.3 or aspect_ratio > 8.0:
-                continue
-                
-            if prob > best_confidence:
-                best_confidence = prob
-                best_cleaned_text = post_process_plate(cleaned)
-                
-                # Extract bounding box to generate the nice crop for UI
-                (tl, tr, br, bl) = bbox
-                
-                # Expand bounding box slightly for padding
-                padding = 5
-                y1 = max(0, int(tl[1]) - padding)
-                y2 = min(frame.shape[0], int(br[1]) + padding)
-                x1 = max(0, int(tl[0]) - padding)
-                x2 = min(frame.shape[1], int(br[0]) + padding)
-                
-                best_cropped = frame[y1:y2, x1:x2]
-                
-        if best_cleaned_text and best_cropped is not None and best_cropped.size > 0:
-            return best_cropped, best_cleaned_text
-            
-        return None, None
+        display_crop_color = img_array[x1:x2+1, y1:y2+1]
+        return display_crop_color, final_plate
