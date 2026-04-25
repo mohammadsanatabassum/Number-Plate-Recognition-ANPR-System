@@ -58,8 +58,12 @@ class PlateDetector:
         # Binarize output mathematically for Tesseract because it struggles with gray shadows
         _, thresh = cv2.threshold(cropped_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-        # PyTesseract structural execution (--psm 8 strictly forces a single word/line)
-        text = pytesseract.image_to_string(thresh, config='--psm 8')
+        # OS detection purely so Windows local users do not crash when running local tests
+        if os.name == 'nt' and os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
+            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+        # PyTesseract structural execution (--psm 7 correctly physically reads a single license plate text line)
+        text = pytesseract.image_to_string(thresh, config='--psm 7')
         
         # Correctly validate formatting
         final_plate = post_process_plate(text)
