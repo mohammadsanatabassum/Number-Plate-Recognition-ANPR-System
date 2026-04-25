@@ -42,37 +42,40 @@ class PlateDetector:
             approx = cv2.approxPolyDP(contour, 10, True)
             if len(approx) == 4:
                 location = approx
-                break
+                
+                # Extract this specific rectangle
+                mask = np.zeros(gray.shape, np.uint8)
+                cv2.drawContours(mask, [location], 0, 255, -1)
+                
+                (x, y) = np.where(mask == 255)
+                # If area is too small, skip
+                if len(x) == 0 or len(y) == 0:
+                    continue
+                
+                (x1, y1) = (np.min(x), np.min(y))
+                (x2, y2) = (np.max(x), np.max(y))
+                cropped_image = gray[x1:x2+1, y1:y2+1]
+                
+                # Scale up perfectly
+                cropped_upscale = cv2.resize(cropped_image, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+                _, thresh = cv2.threshold(cropped_upscale, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                
+                # Tesseract OCR Execution
+                if os.name == 'nt' and os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
+                    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-        if location is None:
-            return img_array, None
-
-        mask = np.zeros(gray.shape, np.uint8)
-        cv2.drawContours(mask, [location], 0, 255, -1)
-        
-        (x, y) = np.where(mask == 255)
-        (x1, y1) = (np.min(x), np.min(y))
-        (x2, y2) = (np.max(x), np.max(y))
-        cropped_image = gray[x1:x2+1, y1:y2+1]
-        
-        # Scale up the cropped image massively to simulate 300 DPI (Tesseract's native requirement for high accuracy)
-        cropped_upscale = cv2.resize(cropped_image, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-        
-        # Binarize the upscaled output mathematically
-        _, thresh = cv2.threshold(cropped_upscale, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-        # OS detection purely so Windows local users do not crash when running local tests
-        if os.name == 'nt' and os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
-            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-
-        # PyTesseract structural execution (--psm 6 detects a uniform block of text, safely capturing multiple lines)
-        custom_config = r'-c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ --psm 6'
-        text = pytesseract.image_to_string(thresh, config=custom_config)
-        
-        # Correctly validate formatting
-        final_plate = post_process_plate(text)
-        if len(final_plate) < 2:
-            return img_array, None
-            
-        display_crop_color = img_array[x1:x2+1, y1:y2+1]
-        return display_crop_color, final_plate
+                custom_config = r'-c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ --psm 6'
+                text = pytesseract.image_to_string(thresh, config=custom_config)
+                
+                # Filter noise results
+                final_plate = post_process_plate(text)
+                
+                # A true license plate is almost always 7 to 9 characters 
+                # (e.g. '29A33185' is 8 characters long). 
+                # We strictly skip anything less than 5 characters to avoid taxi signs or windshield glares.
+                if len(final_plate) >= 6:
+                    display_crop_color = img_array[x1:x2+1, y1:y2+1]
+                    return display_crop_color, final_plate
+                    
+        # If no rectangles contained valid text
+        return img_array, None
