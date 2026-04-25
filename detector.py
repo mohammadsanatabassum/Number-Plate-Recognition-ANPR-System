@@ -13,13 +13,14 @@ def post_process_plate(text):
     text = re.sub(r'[A-Z]+$', '', text)
 
     # Advanced logic to surgically repair OCR ambiguities
-    if len(text) == 8:
-        if text[2] == '4':
-            text = text[:2] + 'A' + text[3:]
-        text = text[:3] + '-' + text[3:6] + '.' + text[6:]
-    elif len(text) == 9:
-        if text[2] == '4':
-            text = text[:2] + 'A' + text[3:]
+    if len(text) >= 3 and text[2] == '4':
+        text = text[:2] + 'A' + text[3:]
+        
+    # Dynamically inject dash and dot formatting regardless of length
+    # Based on standard Vietnam architecture: first 3 characters, dash, middle, dot, last 2
+    if len(text) >= 7:
+        text = text[:3] + '-' + text[3:-2] + '.' + text[-2:]
+        
     return text
 
 class PlateDetector:
