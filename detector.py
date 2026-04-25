@@ -38,6 +38,7 @@ class PlateDetector:
         
         best_box = None
         highest_conf_text = ""
+        final_accuracy = 0.0
         
         for (x, y, w, h) in plates:
             plate_crop = img_array[y:y+h, x:x+w]
@@ -54,16 +55,19 @@ class PlateDetector:
             results = sorted(results, key=lambda r: r[0][0][1])  # Sort by height for line processing
             
             raw_text = ""
+            conf_scores = []
             for (bbox, text, prob) in results:
                 # We filter out pure garbage noise inside the crop
                 if prob > 0.15:
                     raw_text += text
+                    conf_scores.append(prob)
                     
             cleaned_plate = post_process_plate(raw_text)
             
             # Standard license plates globally are virtually never under 4 alphanumeric lengths
             if len(cleaned_plate.replace(" ", "").replace("-", "")) >= 4:
                 highest_conf_text = cleaned_plate
+                final_accuracy = sum(conf_scores) / len(conf_scores) if conf_scores else 0.0
                 best_box = (x, y, w, h)
                 break
                 
@@ -71,7 +75,7 @@ class PlateDetector:
         if best_box is not None:
             (x, y, w, h) = best_box
             display_crop_color = img_array[max(0, y-10):min(img_array.shape[0], y+h+10), max(0, x-10):min(img_array.shape[1], x+w+10)]
-            return display_crop_color, highest_conf_text
+            return display_crop_color, highest_conf_text, final_accuracy
             
         # FALLBACK STAGE: If the plate was so severely angled that HaarCascade missed the shape entirely, 
         # we fallback to reading the entire raw image via the Neural Network (Original Heavy Approach).
@@ -89,15 +93,18 @@ class PlateDetector:
         raw_text = ""
         best_bbox = None
         highest_conf = 0.0
+        conf_scores = []
         
         for (bbox, text, prob) in results:
             if prob > 0.15:
                 raw_text += text
+                conf_scores.append(prob)
                 if prob > highest_conf:
                     highest_conf = prob
                     best_bbox = bbox
 
         final_plate = post_process_plate(raw_text)
+        final_accuracy = sum(conf_scores) / len(conf_scores) if conf_scores else 0.0
         
         if len(final_plate.replace(" ", "").replace("-", "")) >= 4 and best_bbox is not None:
             scale_multiplier = 1.0 if process_img.shape == img_array.shape else (max(h_orig, w_orig) / max_dim)
@@ -107,6 +114,6 @@ class PlateDetector:
             y_max = int(max(pt[1] for pt in best_bbox) * scale_multiplier)
             
             display_crop_color = img_array[max(0, y_min-10):min(h_orig, y_max+10), max(0, x_min-10):min(w_orig, x_max+10)]
-            return display_crop_color, final_plate
+            return display_crop_color, final_plate, final_accuracy
             
-        return img_array, None
+        return img_array, None, 0.0

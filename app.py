@@ -24,9 +24,9 @@ def load_detector():
     return PlateDetector()
 
 def process_and_display_frame(frame, detector):
-    cropped_img, text = detector.detect_and_read_plate(frame)
+    cropped_img, text, accuracy = detector.detect_and_read_plate(frame)
     if text:
-        st.success(f"### Detected Plate: **{text}**")
+        st.success(f"### Detected Plate: **{text}** *(Accuracy: {accuracy*100:.1f}%)*")
         col1, col2 = st.columns(2)
         with col1:
             st.image(cropped_img, caption="Cropped Plate", clamp=True)
@@ -94,11 +94,11 @@ def main():
                     status_text.text(f"Scanning frame {count}/{total_frames}...")
                     progress_bar.progress(min(count / total_frames, 1.0))
                     
-                    cropped_img, text = detector.detect_and_read_plate(frame)
+                    cropped_img, text, accuracy = detector.detect_and_read_plate(frame)
                     if text and text not in plates_found:
                         plates_found.add(text)
                         
-                        st.success(f"### Detected Plate in Video: **{text}**")
+                        st.success(f"### Detected Plate in Video: **{text}** *(Accuracy: {accuracy*100:.1f}%)*")
                         col1, col2 = st.columns(2)
                         with col1:
                             st.image(cropped_img, caption="Cropped Snapshot", clamp=True)
