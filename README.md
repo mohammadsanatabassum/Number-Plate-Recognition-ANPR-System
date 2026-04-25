@@ -1,3 +1,12 @@
+---
+title: Anpr System 🚗
+emoji: 🚀
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+app_port: 7860
+---
 # 🚗 Automatic Number Plate Recognition (ANPR) System
 
 A complete, end-to-end Machine Learning pipeline utilizing PyTorch and Optical Character Recognition (OCR) to automatically detect, extract, and log vehicle license plates from both images and localized video streams.
