@@ -46,11 +46,12 @@ def main():
     if not os.path.exists("captures"):
         os.makedirs("captures")
 
-    detector = load_detector()
-
     uploaded_file = st.file_uploader("Choose an image or video...", type=["jpg", "jpeg", "png", "mp4", "mov", "avi"])
 
     if uploaded_file is not None:
+        # SUPER LAZY LOADING: ONLY load massive 1.5GB Neural Network AFTER health-checks pass and user interacts!
+        detector = load_detector()
+        
         file_ext = uploaded_file.name.split('.')[-1].lower()
         
         if file_ext in ['jpg', 'jpeg', 'png']:
