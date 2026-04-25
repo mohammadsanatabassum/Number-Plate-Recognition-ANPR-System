@@ -33,8 +33,8 @@ class PlateDetector:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         weights_dir = os.path.join(base_dir, 'model_weights')
         
-        # Load the pre-trained neural network
-        self.reader = easyocr.Reader(['en'], gpu=False, model_storage_directory=weights_dir, download_enabled=False)
+        # Load the pre-trained neural network (Auto-download true just in case weights directory is missing inside Docker)
+        self.reader = easyocr.Reader(['en'], gpu=False, model_storage_directory=weights_dir, download_enabled=True)
         print("EasyOCR successfully loaded into RAM.")
 
     def detect_and_read_plate(self, img_array):
