@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import pytesseract
+import easyocr
 import imutils
 import re
 import os
@@ -25,63 +25,80 @@ def post_process_plate(text):
 
 class PlateDetector:
     def __init__(self):
-        print("Initialized ultra-lightweight Tesseract engine.")
+        # We enforce gpu=False because Hugging Face free spaces mostly provide pure CPU instances. 
+        # But this is totally okay, EasyOCR CPU is very fast for small bounding boxes.
+        print("Initializing Heavyweight EasyOCR AI...")
+        
+        # Determine execution directory to safely find the model_weights folder
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        weights_dir = os.path.join(base_dir, 'model_weights')
+        
+        # Load the pre-trained neural network
+        self.reader = easyocr.Reader(['en'], gpu=False, model_storage_directory=weights_dir, download_enabled=False)
+        print("EasyOCR successfully loaded into RAM.")
 
     def detect_and_read_plate(self, img_array):
-        # Memory-safe scaling
+        # Neural Networks are extremely robust. We don't have to manually draw contours anymore!
+        # EasyOCR has a built-in highly advanced CRAFT Text Detector. 
+        # We can just give it the image directly.
+        
+        # To avoid processing heavy backgrounds in huge images, we scale it down safely.
         h, w = img_array.shape[:2]
-        max_dimension = 1000
+        max_dimension = 1200
         if max(h, w) > max_dimension:
             scale = max_dimension / max(h, w)
-            img_array = cv2.resize(img_array, (int(w * scale), int(h * scale)))
+            process_img = cv2.resize(img_array, (int(w * scale), int(h * scale)))
+        else:
+            process_img = img_array.copy()
 
-        gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
-        bfilter = cv2.bilateralFilter(gray, 11, 17, 17)
-        edged = cv2.Canny(bfilter, 30, 200)
-
-        keypoints = cv2.findContours(edged.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        contours = imutils.grab_contours(keypoints)
-        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
+        # The EasyOCR reader returns a list of bounding boxes, text, and confidence scores.
+        # Format: [([[x1,y1], [x2,y1], [x2,y2], [x1,y2]], 'Text', confidence), ...]
+        results = self.reader.readtext(process_img)
         
-        location = None
-        for contour in contours:
-            approx = cv2.approxPolyDP(contour, 10, True)
-            if len(approx) == 4:
-                location = approx
-                
-                # Extract this specific rectangle
-                mask = np.zeros(gray.shape, np.uint8)
-                cv2.drawContours(mask, [location], 0, 255, -1)
-                
-                (x, y) = np.where(mask == 255)
-                # If area is too small, skip
-                if len(x) == 0 or len(y) == 0:
-                    continue
-                
-                (x1, y1) = (np.min(x), np.min(y))
-                (x2, y2) = (np.max(x), np.max(y))
-                cropped_image = gray[x1:x2+1, y1:y2+1]
-                
-                # Scale up perfectly
-                cropped_upscale = cv2.resize(cropped_image, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-                _, thresh = cv2.threshold(cropped_upscale, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                
-                # Tesseract OCR Execution
-                if os.name == 'nt' and os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
-                    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+        if not results:
+            return img_array, None
 
-                custom_config = r'-c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ --psm 6'
-                text = pytesseract.image_to_string(thresh, config=custom_config)
+        # Because a license plate might be split onto two lines (e.g. 29A on top, 33185 on bottom),
+        # EasyOCR might detect them as TWO separate text blocks.
+        # We will concatenate all highly confident alphanumeric text blocks in the center area.
+        
+        # Sort results top-to-bottom so multi-line plates read in the correct order
+        results = sorted(results, key=lambda r: r[0][0][1])  
+        
+        raw_text = ""
+        best_box = None
+        highest_conf = 0.0
+        
+        for (bbox, text, prob) in results:
+            # We filter out pure garbage noise (like tiny blurred signs)
+            if prob > 0.15:
+                # Merge the text
+                raw_text += text
                 
-                # Filter noise results
-                final_plate = post_process_plate(text)
-                
-                # A true license plate is almost always 7 to 9 characters 
-                # (e.g. '29A33185' is 8 characters long). 
-                # We strictly skip anything less than 5 characters to avoid taxi signs or windshield glares.
-                if len(final_plate) >= 6:
-                    display_crop_color = img_array[x1:x2+1, y1:y2+1]
-                    return display_crop_color, final_plate
-                    
-        # If no rectangles contained valid text
-        return img_array, None
+                # We'll use the bounding box of the highest confidence text block for the visualization
+                if prob > highest_conf:
+                    highest_conf = prob
+                    best_box = bbox
+
+        final_plate = post_process_plate(raw_text)
+        
+        # If we failed to build a valid plate length, return None
+        if len(final_plate) < 4:
+            return img_array, None
+
+        # Draw a beautiful green visualization box directly on the image around where the AI found the text
+        if best_box is not None:
+            # Convert bounding box coordinates to integers
+            # Scale coordinates back up if the original image was larger
+            scale_multiplier = 1.0 if process_img.shape == img_array.shape else (max(h, w) / max_dimension)
+            
+            x_min = int(min(pt[0] for pt in best_box) * scale_multiplier)
+            x_max = int(max(pt[0] for pt in best_box) * scale_multiplier)
+            y_min = int(min(pt[1] for pt in best_box) * scale_multiplier)
+            y_max = int(max(pt[1] for pt in best_box) * scale_multiplier)
+            
+            # Extract just that sub-region to display as the "plate crop"
+            display_crop_color = img_array[max(0, y_min-10):min(h, y_max+10), max(0, x_min-10):min(w, x_max+10)]
+            return display_crop_color, final_plate
+            
+        return img_array, final_plate
