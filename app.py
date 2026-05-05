@@ -135,7 +135,7 @@ def main():
         )
         st.info("💡 **Tip:** Get close enough so the plate fills at least 1/4 of the frame for best accuracy.")
 
-        camera_photo = st.camera_input("📷 Take Photo", key="camera_snap")
+        camera_photo = st.camera_input("📷 Take Photo", key="camera_snap", facing_mode="environment")
 
         if camera_photo:
             detector = load_detector()
