@@ -27,6 +27,13 @@ def _enhance(img):
     return cv2.cvtColor(sharp, cv2.COLOR_GRAY2BGR)
 
 
+def _otsu(img):
+    """Binarization to force crisp black-and-white text strokes."""
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    return cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
+
+
 def _upscale(img, target=900):
     h, w  = img.shape[:2]
     scale = max(1.0, target / max(h, w, 1))
@@ -37,10 +44,32 @@ def _upscale(img, target=900):
 
 
 # ── Character correction ──────────────────────────────────────────────────────
-_NUM_MAP  = str.maketrans("OIQSB", "01058")
-_CHAR_MAP = str.maketrans("01",    "OI")
+_NUM_MAP  = str.maketrans("OIQSBZLT", "01058241")
+_CHAR_MAP = str.maketrans("012458",  "OIZASB")
 
 def _fix_chars(text):
+    # ── Pattern enforcement for Indian plates (e.g. RJ14CV0002) ──
+    clean = text.replace(" ", "").replace("-", "")
+    if len(clean) == 10:
+        # Standard format: State(2) RTO(2) Letters(2) Digits(4)
+        res = []
+        for i, c in enumerate(clean):
+            if i in (0, 1, 4, 5):
+                res.append(c.translate(_CHAR_MAP))
+            else:
+                res.append(c.translate(_NUM_MAP))
+        return "".join(res)
+    elif len(clean) == 9:
+        # Format: State(2) RTO(2) Letter(1) Digits(4)
+        res = []
+        for i, c in enumerate(clean):
+            if i in (0, 1, 4):
+                res.append(c.translate(_CHAR_MAP))
+            else:
+                res.append(c.translate(_NUM_MAP))
+        return "".join(res)
+
+    # ── Fallback block-based logic ──
     parts, out = re.split(r'([\s\-])', text), []
     for p in parts:
         if p in (' ', '-'):
@@ -131,7 +160,7 @@ class PlateDetector:
         we score every block on its own and return the single best plate candidate.
         """
         best_text, best_conf = "", 0.0
-        for variant in (crop, _enhance(crop)):
+        for variant in (crop, _enhance(crop), _otsu(crop)):
             img     = _upscale(variant)
             results = self.reader.readtext(img, allowlist=OCR_ALLOWLIST, detail=1)
 
@@ -212,7 +241,7 @@ class PlateDetector:
 
         best_text, best_conf, best_bbox = "", 0.0, None
 
-        for variant in (proc, _enhance(proc)):
+        for variant in (proc, _enhance(proc), _otsu(proc)):
             results = self.reader.readtext(variant, allowlist=OCR_ALLOWLIST, detail=1)
 
             for (bbox, t, p) in results:
