@@ -4,6 +4,8 @@ easyocr
 torch --index-url https://download.pytorch.org/whl/cpu
 torchvision --index-url https://download.pytorch.org/whl/cpu
 Pillow
-imutils
 numpy
 pandas
+ultralytics
+streamlit-webrtc
+av
