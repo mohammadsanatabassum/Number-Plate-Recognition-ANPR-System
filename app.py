@@ -12,7 +12,7 @@ import tempfile
 import uuid
 import threading
 import av
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration, WebRtcMode
 
 from database import init_db, save_plate
 from detector import PlateDetector
@@ -210,7 +210,7 @@ def main():
 
         webrtc_streamer(
             key="live_stream",
-            mode=1,  # SENDRECV
+            mode=WebRtcMode.SENDRECV,
             rtc_configuration=RTC_CONFIGURATION,
             video_processor_factory=VideoProcessor,
             media_stream_constraints={"video": True, "audio": False},
