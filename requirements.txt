@@ -1,4 +1,3 @@
-opencv-python-headless
 streamlit
 easyocr
 torch --index-url https://download.pytorch.org/whl/cpu
@@ -9,3 +8,4 @@ pandas
 ultralytics
 streamlit-webrtc
 av
+huggingface_hub

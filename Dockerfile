@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Install minimal system libs needed by libGL (ultralytics pulls it in)
+# System libs required by OpenCV headless + WebRTC
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libgl1 \
@@ -11,16 +11,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies
+# Step 1: Install all Python dependencies
+# (ultralytics will pull in opencv-python as a side effect)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Force-remove GUI OpenCV that ultralytics silently installs,
-# then reinstall the headless variant so no display is needed.
-RUN pip uninstall -y opencv-python opencv-contrib-python || true
-RUN pip install --no-cache-dir opencv-python-headless
+# Step 2: ALWAYS install opencv-python-headless LAST and FORCE it.
+# This overwrites whatever opencv variant ultralytics installed,
+# ensuring cv2 works without any display/X11 requirement.
+RUN pip install --no-cache-dir --force-reinstall opencv-python-headless
 
-# Copy application files
+# Step 3: Copy application files
 COPY . .
 
 # HuggingFace requires port 7860
