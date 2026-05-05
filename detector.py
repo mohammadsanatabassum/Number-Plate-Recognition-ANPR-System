@@ -8,7 +8,9 @@ from ultralytics import YOLO
 # ── Tuning Constants ──────────────────────────────────────────────────────────
 ACCURACY_THRESHOLD = 0.50
 MIN_PLATE_CHARS    = 4
-OCR_ALLOWLIST      = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
+# Expanded allowlist — preserves ALL characters that physically appear on real plates globally:
+# letters, digits, dash (-), dot (.), slash (/), space, and state/country codes
+OCR_ALLOWLIST      = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-./ "
 
 # COCO class IDs that represent vehicles — YOLO will crop these zones for plate search
 VEHICLE_CLASSES = {2, 3, 5, 7}   # car, motorcycle, bus, truck
@@ -51,10 +53,20 @@ def _fix_chars(text):
 
 
 def _clean(text):
-    text = re.sub(r'[^A-Z0-9\- ]', '', text.upper())
+    text = text.upper()
+    # Keep all real plate characters: letters, digits, dash, dot, slash, space
+    text = re.sub(r'[^A-Z0-9\-./ ]', '', text)
+    # Strip leading/trailing non-alphanumeric noise (bolts, shadows etc.)
     text = re.sub(r'^[^A-Z0-9]+', '', text)
     text = re.sub(r'[^A-Z0-9]+$', '', text)
+    # Collapse multiple consecutive spaces
+    text = re.sub(r' {2,}', ' ', text)
     return _fix_chars(text).strip()
+
+
+def _alnum_count(text):
+    """Count only letters and digits — ignore punctuation for minimum length check."""
+    return sum(c.isalnum() for c in text)
 
 
 # ── Main Detector ─────────────────────────────────────────────────────────────
@@ -132,9 +144,9 @@ class PlateDetector:
 
                 text, ocr_conf = self._ocr(plate_zone)
                 combined = 0.35 * yolo_conf + 0.65 * ocr_conf
-                char_n   = len(text.replace(" ", "").replace("-", ""))
+                char_n   = _alnum_count(text)
 
-                if char_n >= MIN_PLATE_CHARS and combined >= ACCURACY_THRESHOLD:
+                if char_n >= MIN_PLATE_CHARS and combined >= ACCURACY_THRESHOLD:  # noqa
                     candidates.append((combined, crop[int(ph * 0.55):, :], text))
 
         if candidates:
@@ -170,7 +182,7 @@ class PlateDetector:
             if conf > best_conf:
                 best_conf, best_text, best_bbox = conf, cleaned, top_bbox
 
-        char_n = len(best_text.replace(" ", "").replace("-", ""))
+        char_n = _alnum_count(best_text)
         if char_n >= MIN_PLATE_CHARS and best_conf >= ACCURACY_THRESHOLD and best_bbox:
             sm   = 1.0 if proc.shape == img_array.shape else (max(h, w) / max_d)
             xmin = int(min(p[0] for p in best_bbox) * sm)
