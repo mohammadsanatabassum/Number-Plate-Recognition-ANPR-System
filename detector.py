@@ -164,14 +164,37 @@ class PlateDetector:
             img     = _upscale(variant)
             results = self.reader.readtext(img, allowlist=OCR_ALLOWLIST, detail=1)
 
+            # Sort top-to-bottom, left-to-right
+            results = sorted(results, key=lambda r: (r[0][0][1], r[0][0][0]))
+
+            valid_blocks = []
+            scores = []
             for (_, t, p) in results:
-                if p < 0.10:
+                if p < 0.10: 
                     continue
-                cleaned = _clean(t)          # clean this block alone
-                if not _is_valid_plate(cleaned):
-                    continue                  # skip KIA, HONDA, pure-letter blocks
-                if p > best_conf:
-                    best_conf, best_text = p, cleaned
+                t_clean = re.sub(r'[^A-Z0-9]', '', t.upper())
+                if not t_clean: 
+                    continue
+                
+                # Reject known car brands
+                if t_clean in _NON_PLATE_WORDS:
+                    continue
+                # Reject purely alphabetical blocks of length >= 3 (e.g. KIA, IND)
+                if len(t_clean) >= 3 and t_clean.isalpha():
+                    continue
+
+                valid_blocks.append(t)
+                scores.append(p)
+
+            if not valid_blocks:
+                continue
+
+            raw = " ".join(valid_blocks)
+            cleaned = _clean(raw)
+            conf = sum(scores) / len(scores)
+
+            if conf > best_conf and _is_valid_plate(cleaned):
+                best_conf, best_text = conf, cleaned
 
         return best_text, best_conf
 
@@ -243,15 +266,38 @@ class PlateDetector:
 
         for variant in (proc, _enhance(proc), _otsu(proc)):
             results = self.reader.readtext(variant, allowlist=OCR_ALLOWLIST, detail=1)
+            results = sorted(results, key=lambda r: (r[0][0][1], r[0][0][0]))
 
+            valid_blocks = []
+            scores = []
+            top_bbox = None
+            
             for (bbox, t, p) in results:
-                if p < 0.10:
+                if p < 0.10: 
                     continue
-                cleaned = _clean(t)             # evaluate this block alone
-                if not _is_valid_plate(cleaned):
-                    continue                     # skip car brands, pure letters etc.
-                if p > best_conf:
-                    best_conf, best_text, best_bbox = p, cleaned, bbox
+                t_clean = re.sub(r'[^A-Z0-9]', '', t.upper())
+                if not t_clean: 
+                    continue
+                
+                if t_clean in _NON_PLATE_WORDS:
+                    continue
+                if len(t_clean) >= 3 and t_clean.isalpha():
+                    continue
+
+                valid_blocks.append(t)
+                scores.append(p)
+                if not top_bbox:
+                    top_bbox = bbox
+
+            if not valid_blocks:
+                continue
+
+            raw = " ".join(valid_blocks)
+            cleaned = _clean(raw)
+            conf = sum(scores) / len(scores)
+
+            if conf > best_conf and _is_valid_plate(cleaned):
+                best_conf, best_text, best_bbox = conf, cleaned, top_bbox
 
         if _alnum_count(best_text) >= MIN_PLATE_CHARS and best_conf >= ACCURACY_THRESHOLD and best_bbox:
             sm   = 1.0 if proc.shape == img_array.shape else (max(h, w) / max_d)
