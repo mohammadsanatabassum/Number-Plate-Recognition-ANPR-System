@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# System libs required by OpenCV headless + WebRTC
+# System libs required by OpenCV headless
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libgl1 \
@@ -11,20 +11,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Step 1: Install all Python dependencies
-# (ultralytics will pull in opencv-python as a side effect)
+# Install all Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Step 2: ALWAYS install opencv-python-headless LAST and FORCE it.
-# This overwrites whatever opencv variant ultralytics installed,
-# ensuring cv2 works without any display/X11 requirement.
+# Force opencv-python-headless LAST so ultralytics cannot overwrite it
 RUN pip install --no-cache-dir --force-reinstall opencv-python-headless
 
-# Step 3: Copy application files
+# Pre-download YOLOv8n weights during BUILD (not runtime) so first user request is instant
+# yolov8n.pt is the standard public Ultralytics model (~6MB), no authentication required
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); print('YOLOv8n weights cached.')"
+
+# Copy application files
 COPY . .
 
-# HuggingFace requires port 7860
 EXPOSE 7860
 
 CMD ["streamlit", "run", "app.py", \
