@@ -225,14 +225,17 @@ def main():
         )
         st.warning("📱 **On phone?** Tap **Select Device** below the video to choose your rear-facing camera.")
 
-        webrtc_streamer(
-            key="live_stream",
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=RTC_CONFIGURATION,
-            video_processor_factory=VideoProcessor,
-            media_stream_constraints={"video": True, "audio": False},
-            async_processing=True,
-        )
+        try:
+            webrtc_streamer(
+                key="live_stream",
+                mode=WebRtcMode.SENDRECV,
+                rtc_configuration=RTC_CONFIGURATION,
+                video_processor_factory=VideoProcessor,
+                media_stream_constraints={"video": True, "audio": False},
+                async_processing=True,
+            )
+        except Exception as e:
+            st.warning("⚠️ The live video stream disconnected. Please refresh the page or use Tab 3 (Take Photo).")
 
     # ── Database Viewer ────────────────────────────────────────────────────────
     st.markdown("---")
