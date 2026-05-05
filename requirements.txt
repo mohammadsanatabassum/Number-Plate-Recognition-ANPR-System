@@ -6,6 +6,5 @@ Pillow
 numpy
 pandas
 ultralytics
-streamlit-webrtc
 av
 huggingface_hub

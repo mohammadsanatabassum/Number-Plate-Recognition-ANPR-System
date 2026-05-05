@@ -10,8 +10,6 @@ import numpy as np
 from PIL import Image
 import tempfile
 import uuid
-import av
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 
 from database import init_db, save_plate
 from detector import PlateDetector
@@ -28,42 +26,7 @@ st.set_page_config(
 def load_detector():
     return PlateDetector()
 
-# ── WebRTC config: Google public STUN server so HuggingFace proxy is bypassed ─
-RTC_CONFIG = RTCConfiguration({
-    "iceServers": [
-        {"urls": ["stun:stun.l.google.com:19302"]},
-        {"urls": ["stun:stun1.l.google.com:19302"]},
-    ]
-})
-
-# ── Live-camera video processor ───────────────────────────────────────────────
-class ANPRVideoProcessor(VideoProcessorBase):
-    def __init__(self):
-        self.detector = load_detector()
-        self.last_plate = None
-        self.last_accuracy = 0.0
-        self.last_crop = None
-
-    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-        img = frame.to_ndarray(format="bgr24")
-
-        _, plate_text, accuracy = self.detector.detect_and_read_plate(img)
-
-        if plate_text:
-            self.last_plate = plate_text
-            self.last_accuracy = accuracy
-
-            # Draw overlay on live frame
-            h, w = img.shape[:2]
-            label = f"{plate_text}  {accuracy*100:.1f}%"
-            cv2.rectangle(img, (10, h - 60), (10 + len(label) * 14, h - 10), (0, 200, 0), -1)
-            cv2.putText(img, label, (14, h - 22),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-
-# ── Shared helper ──────────────────────────────────────────────────────────────
+# ── Shared result display ─────────────────────────────────────────────────────
 def display_result(cropped_img, text, accuracy, original_frame=None):
     st.success(f"### ✅ Detected Plate: **{text}**   *(Accuracy: {accuracy*100:.1f}%)*")
     col1, col2 = st.columns(2)
@@ -79,8 +42,7 @@ def display_result(cropped_img, text, accuracy, original_frame=None):
         st.info("✅ Logged into SQLite database!")
         st.metric("Detection Confidence", f"{accuracy*100:.1f}%")
 
-
-# ── Main UI ───────────────────────────────────────────────────────────────────
+# ── Main App ──────────────────────────────────────────────────────────────────
 def main():
     st.title("🚗 Automatic Number Plate Recognition")
     st.markdown(
@@ -107,7 +69,7 @@ def main():
             frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
             st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), caption="Uploaded Image", use_container_width=True)
 
-            with st.spinner("🔍 Running YOLOv8 detection + EasyOCR..."):
+            with st.spinner("🔍 Running YOLOv8 + EasyOCR..."):
                 crop, text, accuracy = detector.detect_and_read_plate(frame)
 
             if text:
@@ -164,36 +126,29 @@ def main():
             if not plates_found:
                 st.warning("No plates detected in this video.")
 
-    # ── TAB 3: Live Camera ────────────────────────────────────────────────────
+    # ── TAB 3: Live Camera (via st.camera_input) ──────────────────────────────
     with tab3:
-        st.subheader("Live Camera Detection")
+        st.subheader("📷 Live Camera Capture")
         st.markdown(
-            "Click **START** to activate your webcam. "
-            "The AI will detect license plates in real-time and overlay the result directly on the video feed!"
+            "Point your camera at a license plate, then click **📷 Take Photo** below. "
+            "The AI will instantly detect and read the plate from your photo!"
         )
-        st.warning(
-            "⚠️ Your browser will ask for camera permission — please click **Allow**. "
-            "If the stream doesn't start, try Chrome or Edge."
-        )
+        st.info("💡 **Tip:** Get close enough so the plate fills at least 1/4 of the frame for best accuracy.")
 
-        ctx = webrtc_streamer(
-            key="anpr-live",
-            video_processor_factory=ANPRVideoProcessor,
-            rtc_configuration=RTC_CONFIG,
-            media_stream_constraints={"video": True, "audio": False},
-            async_processing=True,
-        )
+        camera_photo = st.camera_input("📷 Take Photo", key="camera_snap")
 
-        if ctx.video_processor:
-            st.markdown("---")
-            st.subheader("📋 Last Detected Plate")
-            if ctx.video_processor.last_plate:
-                st.success(
-                    f"### **{ctx.video_processor.last_plate}**  "
-                    f"*(Accuracy: {ctx.video_processor.last_accuracy*100:.1f}%)*"
-                )
+        if camera_photo:
+            detector = load_detector()
+            file_bytes = np.asarray(bytearray(camera_photo.read()), dtype=np.uint8)
+            frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+
+            with st.spinner("🔍 Running YOLOv8 + EasyOCR on captured photo..."):
+                crop, text, accuracy = detector.detect_and_read_plate(frame)
+
+            if text:
+                display_result(crop, text, accuracy, frame)
             else:
-                st.info("Waiting for a clear plate in the camera frame...")
+                st.error("❌ No plate detected. Try taking the photo closer to the plate.")
 
     # ── Database Viewer ────────────────────────────────────────────────────────
     st.markdown("---")
