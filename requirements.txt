@@ -1,4 +1,4 @@
-streamlit
+streamlit>=1.36.0
 easyocr
 torch --index-url https://download.pytorch.org/whl/cpu
 torchvision --index-url https://download.pytorch.org/whl/cpu
