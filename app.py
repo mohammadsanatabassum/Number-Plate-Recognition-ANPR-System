@@ -135,7 +135,8 @@ def main():
         )
         st.info("💡 **Tip:** Get close enough so the plate fills at least 1/4 of the frame for best accuracy.")
 
-        camera_photo = st.camera_input("📷 Take Photo", key="camera_snap", facing_mode="environment")
+        st.warning("📱 **On phone?** After the camera opens, tap the **🔄 flip/switch camera icon** in the corner to switch to your rear camera before taking the photo.")
+        camera_photo = st.camera_input("📷 Take Photo", key="camera_snap")
 
         if camera_photo:
             detector = load_detector()
