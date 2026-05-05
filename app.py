@@ -10,6 +10,9 @@ import numpy as np
 from PIL import Image
 import tempfile
 import uuid
+import threading
+import av
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 
 from database import init_db, save_plate
 from detector import PlateDetector
@@ -42,6 +45,51 @@ def display_result(cropped_img, text, accuracy, original_frame=None):
         st.info("✅ Logged into SQLite database!")
         st.metric("Detection Confidence", f"{accuracy*100:.1f}%")
 
+# ── WebRTC Video Processor ───────────────────────────────────────────────────
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
+class VideoProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.frame_count = 0
+        self.last_result = None
+        self.lock = threading.Lock()
+        self.detector = None
+
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_ndarray(format="bgr24")
+        self.frame_count += 1
+        
+        # Load detector lazily in this thread
+        if self.detector is None:
+            self.detector = PlateDetector()
+
+        # Run heavy OCR only every 15 frames to save CPU
+        if self.frame_count % 15 == 0:
+            # We don't want to crash the stream if detection fails or finds nothing
+            try:
+                crop, text, acc = self.detector.detect_and_read_plate(img)
+                if text:
+                    with self.lock:
+                        self.last_result = (text, acc)
+                        save_plate(text, "Live Stream Detection")
+            except Exception:
+                pass
+
+        # Draw overlay if we have a recent detection
+        with self.lock:
+            result = self.last_result
+
+        if result:
+            text, acc = result
+            # Green background for text
+            cv2.rectangle(img, (10, 10), (350, 60), (0, 255, 0), -1)
+            cv2.putText(img, f"{text} ({acc*100:.1f}%)", (20, 45),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+            
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
 # ── Main App ──────────────────────────────────────────────────────────────────
 def main():
     st.title("🚗 Automatic Number Plate Recognition")
@@ -53,7 +101,7 @@ def main():
 
     init_db()
 
-    tab1, tab2, tab3 = st.tabs(["📁 Upload Image", "🎬 Upload Video", "📷 Live Camera"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📁 Upload Image", "🎬 Upload Video", "📷 Take Photo", "📹 Live Video Stream"])
 
     # ── TAB 1: Image Upload ───────────────────────────────────────────────────
     with tab1:
@@ -126,9 +174,9 @@ def main():
             if not plates_found:
                 st.warning("No plates detected in this video.")
 
-    # ── TAB 3: Live Camera (via st.camera_input) ──────────────────────────────
+    # ── TAB 3: Take Photo (via st.camera_input) ───────────────────────────────
     with tab3:
-        st.subheader("📷 Live Camera Capture")
+        st.subheader("📷 Take Photo")
         st.markdown(
             "Point your camera at a license plate, then click **📷 Take Photo** below. "
             "The AI will instantly detect and read the plate from your photo!"
@@ -150,6 +198,24 @@ def main():
                 display_result(crop, text, accuracy, frame)
             else:
                 st.error("❌ No plate detected. Try taking the photo closer to the plate.")
+
+    # ── TAB 4: Live Video Stream ──────────────────────────────────────────────
+    with tab4:
+        st.subheader("📹 Continuous Live Video Stream")
+        st.markdown(
+            "This mode continuously analyzes your webcam feed to detect plates in real-time. "
+            "Because AI processing is heavy, it scans exactly **2 frames per second**."
+        )
+        st.warning("📱 **On phone?** Tap **Select Device** below the video to choose your rear-facing camera.")
+
+        webrtc_streamer(
+            key="live_stream",
+            mode=1,  # SENDRECV
+            rtc_configuration=RTC_CONFIGURATION,
+            video_processor_factory=VideoProcessor,
+            media_stream_constraints={"video": True, "audio": False},
+            async_processing=True,
+        )
 
     # ── Database Viewer ────────────────────────────────────────────────────────
     st.markdown("---")
