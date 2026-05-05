@@ -69,6 +69,44 @@ def _alnum_count(text):
     return sum(c.isalnum() for c in text)
 
 
+# Known car body words that are NOT license plates
+_NON_PLATE_WORDS = {
+    "BOYACA", "HONDA", "TOYOTA", "SUZUKI", "YAMAHA", "KAWASAKI", "BAJAJ",
+    "NISSAN", "HYUNDAI", "FORD", "CHEVROLET", "BMW", "AUDI", "MERCEDES",
+    "VOLKSWAGEN", "KIA", "MAHINDRA", "TATA", "MARUTI", "RENAULT", "SKODA",
+    "JEEP", "MITSUBISHI", "SUBARU", "LEXUS", "VOLVO", "PEUGEOT", "FIAT",
+    "DATSUN", "ISUZU", "OPEL", "SEAT", "CITROEN", "ALFA", "ROMEO",
+    "POLICE", "AMBULANCE", "FIRE", "TAXI", "BUS", "TRUCK",
+}
+
+
+def _is_valid_plate(text):
+    """
+    Return True only if the text looks like a real license plate.
+    Key rules:
+      1. Must contain at least ONE digit (BOYACA, HONDA etc. have zero digits)
+      2. Must contain at least ONE letter (pure numbers are rare/invalid)
+      3. Must not be a known car brand or body label word
+      4. Total alphanumeric length must be between 4 and 12
+    """
+    alphanums = re.sub(r'[^A-Z0-9]', '', text.upper())
+    digits  = sum(c.isdigit() for c in alphanums)
+    letters = sum(c.isalpha() for c in alphanums)
+    length  = len(alphanums)
+
+    if digits == 0:          # Pure letters → BOYACA, HONDA etc. → reject
+        return False
+    if letters == 0:         # Pure digits → unlikely to be a real plate → reject
+        return False
+    if length < 4 or length > 14:
+        return False
+    # Reject if the text (stripped of punctuation) exactly matches a known non-plate word
+    if alphanums in _NON_PLATE_WORDS:
+        return False
+    return True
+
+
+
 # ── Main Detector ─────────────────────────────────────────────────────────────
 class PlateDetector:
     def __init__(self):
@@ -146,7 +184,7 @@ class PlateDetector:
                 combined = 0.35 * yolo_conf + 0.65 * ocr_conf
                 char_n   = _alnum_count(text)
 
-                if char_n >= MIN_PLATE_CHARS and combined >= ACCURACY_THRESHOLD:  # noqa
+                if char_n >= MIN_PLATE_CHARS and combined >= ACCURACY_THRESHOLD and _is_valid_plate(text):
                     candidates.append((combined, crop[int(ph * 0.55):, :], text))
 
         if candidates:
@@ -183,7 +221,7 @@ class PlateDetector:
                 best_conf, best_text, best_bbox = conf, cleaned, top_bbox
 
         char_n = _alnum_count(best_text)
-        if char_n >= MIN_PLATE_CHARS and best_conf >= ACCURACY_THRESHOLD and best_bbox:
+        if char_n >= MIN_PLATE_CHARS and best_conf >= ACCURACY_THRESHOLD and best_bbox and _is_valid_plate(best_text):
             sm   = 1.0 if proc.shape == img_array.shape else (max(h, w) / max_d)
             xmin = int(min(p[0] for p in best_bbox) * sm)
             xmax = int(max(p[0] for p in best_bbox) * sm)
