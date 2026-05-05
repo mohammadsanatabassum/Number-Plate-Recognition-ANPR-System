@@ -6,7 +6,7 @@ import os
 from ultralytics import YOLO
 
 # ── Tuning Constants ──────────────────────────────────────────────────────────
-ACCURACY_THRESHOLD = 0.50
+ACCURACY_THRESHOLD = 0.35   # lowered — EasyOCR on small crops often scores 0.4-0.6
 MIN_PLATE_CHARS    = 4
 # Expanded allowlist — preserves ALL characters that physically appear on real plates globally:
 # letters, digits, dash (-), dot (.), slash (/), space, and state/country codes
@@ -82,26 +82,23 @@ _NON_PLATE_WORDS = {
 
 def _is_valid_plate(text):
     """
-    Return True only if the text looks like a real license plate.
-    Key rules:
-      1. Must contain at least ONE digit (BOYACA, HONDA etc. have zero digits)
-      2. Must contain at least ONE letter (pure numbers are rare/invalid)
-      3. Must not be a known car brand or body label word
-      4. Total alphanumeric length must be between 4 and 12
+    Minimal sanity check to reject obvious non-plate reads.
+    Rules (kept deliberately loose so real plates are not blocked):
+      1. Must contain at least ONE digit (rejects BOYACA, HONDA, TOYOTA etc.)
+      2. Total alphanumeric length must be between 3 and 15
+      3. Must not be an exact match to a known car brand/body word
+    Note: we deliberately do NOT require letters, because some countries
+    issue fully-numeric plates (e.g. Saudi Arabia, old Indian plates).
     """
     alphanums = re.sub(r'[^A-Z0-9]', '', text.upper())
-    digits  = sum(c.isdigit() for c in alphanums)
-    letters = sum(c.isalpha() for c in alphanums)
-    length  = len(alphanums)
+    digits = sum(c.isdigit() for c in alphanums)
+    length = len(alphanums)
 
-    if digits == 0:          # Pure letters → BOYACA, HONDA etc. → reject
+    if digits == 0:                        # Pure letters → BOYACA etc. → reject
         return False
-    if letters == 0:         # Pure digits → unlikely to be a real plate → reject
+    if length < 3 or length > 15:
         return False
-    if length < 4 or length > 14:
-        return False
-    # Reject if the text (stripped of punctuation) exactly matches a known non-plate word
-    if alphanums in _NON_PLATE_WORDS:
+    if alphanums in _NON_PLATE_WORDS:      # Exact match to known brand → reject
         return False
     return True
 
