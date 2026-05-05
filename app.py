@@ -47,7 +47,12 @@ def display_result(cropped_img, text, accuracy, original_frame=None):
 
 # ── WebRTC Video Processor ───────────────────────────────────────────────────
 RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    {"iceServers": [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {"urls": ["stun:stun1.l.google.com:19302"]},
+        {"urls": ["stun:stun2.l.google.com:19302"]},
+        {"urls": ["stun:stun.services.mozilla.com"]}
+    ]}
 )
 
 class VideoProcessor(VideoProcessorBase):
