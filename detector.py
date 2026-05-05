@@ -124,21 +124,26 @@ class PlateDetector:
         )
         print("Models ready.")
 
-    # ── OCR: run two preprocessing variants and return the better result ──────
+    # ── OCR: evaluate EACH text block individually, pick the best valid one ──
     def _ocr(self, crop):
+        """
+        Instead of concatenating all text blocks (which merges 'KIA' + plate text),
+        we score every block on its own and return the single best plate candidate.
+        """
         best_text, best_conf = "", 0.0
         for variant in (crop, _enhance(crop)):
             img     = _upscale(variant)
             results = self.reader.readtext(img, allowlist=OCR_ALLOWLIST, detail=1)
-            results = sorted(results, key=lambda r: r[0][0][1])
-            raw, scores = "", []
+
             for (_, t, p) in results:
-                if p > 0.10:
-                    raw += t; scores.append(p)
-            cleaned = _clean(raw)
-            conf    = sum(scores) / len(scores) if scores else 0.0
-            if conf > best_conf:
-                best_conf, best_text = conf, cleaned
+                if p < 0.10:
+                    continue
+                cleaned = _clean(t)          # clean this block alone
+                if not _is_valid_plate(cleaned):
+                    continue                  # skip KIA, HONDA, pure-letter blocks
+                if p > best_conf:
+                    best_conf, best_text = p, cleaned
+
         return best_text, best_conf
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -193,10 +198,14 @@ class PlateDetector:
         return self._full_image_ocr(img_array)
 
     def _full_image_ocr(self, img_array):
-        h, w   = img_array.shape[:2]
-        max_d  = 1200
+        """
+        Fallback: scan the whole image, evaluate EACH text block individually,
+        return the block that best matches a license plate pattern.
+        """
+        h, w  = img_array.shape[:2]
+        max_d = 1200
         if max(h, w) > max_d:
-            s   = max_d / max(h, w)
+            s    = max_d / max(h, w)
             proc = cv2.resize(img_array, (int(w * s), int(h * s)))
         else:
             proc = img_array
@@ -205,26 +214,24 @@ class PlateDetector:
 
         for variant in (proc, _enhance(proc)):
             results = self.reader.readtext(variant, allowlist=OCR_ALLOWLIST, detail=1)
-            results = sorted(results, key=lambda r: r[0][0][1])
-            raw, scores, top_bbox, top_p = "", [], None, 0.0
-            for (bbox, t, p) in results:
-                if p > 0.10:
-                    raw += t; scores.append(p)
-                    if p > top_p:
-                        top_p, top_bbox = p, bbox
-            cleaned = _clean(raw)
-            conf    = sum(scores) / len(scores) if scores else 0.0
-            if conf > best_conf:
-                best_conf, best_text, best_bbox = conf, cleaned, top_bbox
 
-        char_n = _alnum_count(best_text)
-        if char_n >= MIN_PLATE_CHARS and best_conf >= ACCURACY_THRESHOLD and best_bbox and _is_valid_plate(best_text):
+            for (bbox, t, p) in results:
+                if p < 0.10:
+                    continue
+                cleaned = _clean(t)             # evaluate this block alone
+                if not _is_valid_plate(cleaned):
+                    continue                     # skip car brands, pure letters etc.
+                if p > best_conf:
+                    best_conf, best_text, best_bbox = p, cleaned, bbox
+
+        if _alnum_count(best_text) >= MIN_PLATE_CHARS and best_conf >= ACCURACY_THRESHOLD and best_bbox:
             sm   = 1.0 if proc.shape == img_array.shape else (max(h, w) / max_d)
-            xmin = int(min(p[0] for p in best_bbox) * sm)
-            xmax = int(max(p[0] for p in best_bbox) * sm)
-            ymin = int(min(p[1] for p in best_bbox) * sm)
-            ymax = int(max(p[1] for p in best_bbox) * sm)
-            crop = img_array[max(0,ymin-10):min(h,ymax+10), max(0,xmin-10):min(w,xmax+10)]
+            xmin = int(min(pt[0] for pt in best_bbox) * sm)
+            xmax = int(max(pt[0] for pt in best_bbox) * sm)
+            ymin = int(min(pt[1] for pt in best_bbox) * sm)
+            ymax = int(max(pt[1] for pt in best_bbox) * sm)
+            crop = img_array[max(0, ymin-10):min(h, ymax+10),
+                             max(0, xmin-10):min(w, xmax+10)]
             return crop, best_text, best_conf
 
         return img_array, None, 0.0
