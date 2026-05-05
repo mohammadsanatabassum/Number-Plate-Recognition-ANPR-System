@@ -54,6 +54,7 @@ class VideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.frame_count = 0
         self.last_result = None
+        self.frames_since_detection = 0
         self.lock = threading.Lock()
         self.detector = None
 
@@ -61,32 +62,43 @@ class VideoProcessor(VideoProcessorBase):
         img = frame.to_ndarray(format="bgr24")
         self.frame_count += 1
         
-        # Load detector lazily in this thread
-        if self.detector is None:
-            self.detector = PlateDetector()
+        try:
+            # Safely use the global cached detector (avoids PyTorch thread initialization bugs)
+            if self.detector is None:
+                self.detector = load_detector()
 
-        # Run heavy OCR only every 15 frames to save CPU
-        if self.frame_count % 15 == 0:
-            # We don't want to crash the stream if detection fails or finds nothing
-            try:
+            # Run heavy OCR only every 15 frames to save CPU
+            if self.frame_count % 15 == 0:
                 crop, text, acc = self.detector.detect_and_read_plate(img)
-                if text:
-                    with self.lock:
+                with self.lock:
+                    if text:
                         self.last_result = (text, acc)
+                        self.frames_since_detection = 0
                         save_plate(text, "Live Stream Detection")
-            except Exception:
-                pass
+                    else:
+                        self.frames_since_detection += 15
+                        # Clear old result if nothing detected for 2 seconds (60 frames)
+                        if self.frames_since_detection > 60:
+                            self.last_result = None
+
+        except Exception as e:
+            with self.lock:
+                self.last_result = (f"ERR: {str(e)[:25]}", 0.0)
 
         # Draw overlay if we have a recent detection
         with self.lock:
             result = self.last_result
 
+        # Always draw a scanning indicator so user knows it's not frozen
+        cv2.circle(img, (w:=img.shape[1]-30, 30), 10, (0, 0, 255) if self.frame_count % 30 < 15 else (0, 255, 0), -1)
+
         if result:
             text, acc = result
-            # Green background for text
-            cv2.rectangle(img, (10, 10), (350, 60), (0, 255, 0), -1)
-            cv2.putText(img, f"{text} ({acc*100:.1f}%)", (20, 45),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+            # Red background for errors, green for success
+            color = (0, 0, 255) if text.startswith("ERR") else (0, 255, 0)
+            cv2.rectangle(img, (10, 10), (450, 60), color, -1)
+            cv2.putText(img, f"{text} ({acc*100:.1f}%)" if not text.startswith("ERR") else text, 
+                        (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
             
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
