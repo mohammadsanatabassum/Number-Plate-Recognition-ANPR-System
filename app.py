@@ -64,12 +64,25 @@ def get_ice_servers():
         except Exception as e:
             print(f"Failed to fetch Twilio TURN servers: {e}")
 
-    # Fallback to free STUN servers (will fail on strict mobile firewalls)
+    # Fallback to free STUN and Public Metered TURN servers
     return [
         {"urls": ["stun:stun.l.google.com:19302"]},
         {"urls": ["stun:stun1.l.google.com:19302"]},
-        {"urls": ["stun:stun2.l.google.com:19302"]},
-        {"urls": ["stun:stun.services.mozilla.com"]}
+        {
+            "urls": ["turn:global.relay.metered.ca:80"],
+            "username": "83eebabf8b4cce9d5dbcb749",
+            "credential": "83eebabf8b4cce9d5dbcb749"
+        },
+        {
+            "urls": ["turn:global.relay.metered.ca:443"],
+            "username": "83eebabf8b4cce9d5dbcb749",
+            "credential": "83eebabf8b4cce9d5dbcb749"
+        },
+        {
+            "urls": ["turn:global.relay.metered.ca:443?transport=tcp"],
+            "username": "83eebabf8b4cce9d5dbcb749",
+            "credential": "83eebabf8b4cce9d5dbcb749"
+        }
     ]
 
 RTC_CONFIGURATION = RTCConfiguration(
