@@ -54,7 +54,21 @@ def get_ice_servers():
     """
     import requests
     
-    # 1. Try Metered.ca (Most reliable free TURN)
+    # 1. Try Direct TURN Credentials (Easiest way from Metered dashboard)
+    turn_url = os.environ.get("TURN_URL")
+    turn_username = os.environ.get("TURN_USERNAME")
+    turn_credential = os.environ.get("TURN_CREDENTIAL")
+    if turn_url and turn_username and turn_credential:
+        return [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {
+                "urls": [turn_url],
+                "username": turn_username,
+                "credential": turn_credential
+            }
+        ]
+
+    # 2. Try Metered.ca API Key method
     metered_app = os.environ.get("METERED_APP_NAME")
     metered_api = os.environ.get("METERED_API_KEY")
     if metered_app and metered_api:
@@ -66,7 +80,7 @@ def get_ice_servers():
         except Exception as e:
             print(f"Failed to fetch Metered TURN servers: {e}")
 
-    # 2. Try Twilio
+    # 3. Try Twilio
     account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
 
