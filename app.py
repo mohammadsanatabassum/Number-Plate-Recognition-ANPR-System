@@ -13,6 +13,7 @@ import uuid
 import threading
 import av
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration, WebRtcMode
+from twilio.rest import Client
 
 from database import init_db, save_plate
 from detector import PlateDetector
@@ -45,14 +46,34 @@ def display_result(cropped_img, text, accuracy, original_frame=None):
         st.info("✅ Logged into SQLite database!")
         st.metric("Detection Confidence", f"{accuracy*100:.1f}%")
 
-# ── WebRTC Video Processor ───────────────────────────────────────────────────
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [
+# ── WebRTC Video Processor & TURN Servers ───────────────────────────────────
+@st.cache_data
+def get_ice_servers():
+    """
+    Fetches free TURN servers from Twilio if credentials are provided in Hugging Face Secrets.
+    This strictly bypasses the "Connection taking longer than expected" network block.
+    """
+    account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
+
+    if account_sid and auth_token:
+        try:
+            client = Client(account_sid, auth_token)
+            token = client.tokens.create()
+            return token.ice_servers
+        except Exception as e:
+            print(f"Failed to fetch Twilio TURN servers: {e}")
+
+    # Fallback to free STUN servers (will fail on strict mobile firewalls)
+    return [
         {"urls": ["stun:stun.l.google.com:19302"]},
         {"urls": ["stun:stun1.l.google.com:19302"]},
         {"urls": ["stun:stun2.l.google.com:19302"]},
         {"urls": ["stun:stun.services.mozilla.com"]}
-    ]}
+    ]
+
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": get_ice_servers()}
 )
 
 class VideoProcessor(VideoProcessorBase):

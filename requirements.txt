@@ -10,3 +10,4 @@ av
 huggingface_hub
 streamlit-webrtc
 tornado<6.3
+twilio
