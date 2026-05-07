@@ -50,9 +50,23 @@ def display_result(cropped_img, text, accuracy, original_frame=None):
 @st.cache_data
 def get_ice_servers():
     """
-    Fetches free TURN servers from Twilio if credentials are provided in Hugging Face Secrets.
-    This strictly bypasses the "Connection taking longer than expected" network block.
+    Fetches free TURN servers from Metered or Twilio if credentials are provided in Hugging Face Secrets.
     """
+    import requests
+    
+    # 1. Try Metered.ca (Most reliable free TURN)
+    metered_app = os.environ.get("METERED_APP_NAME")
+    metered_api = os.environ.get("METERED_API_KEY")
+    if metered_app and metered_api:
+        try:
+            url = f"https://{metered_app}.metered.live/api/v1/turn/credentials?apiKey={metered_api}"
+            res = requests.get(url)
+            if res.status_code == 200:
+                return res.json()
+        except Exception as e:
+            print(f"Failed to fetch Metered TURN servers: {e}")
+
+    # 2. Try Twilio
     account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
 
