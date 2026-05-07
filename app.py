@@ -54,19 +54,16 @@ def get_ice_servers():
     """
     import requests
     
-    # 1. Try Direct TURN Credentials (Easiest way from Metered dashboard)
-    turn_url = os.environ.get("TURN_URL")
-    turn_username = os.environ.get("TURN_USERNAME")
-    turn_credential = os.environ.get("TURN_CREDENTIAL")
-    if turn_url and turn_username and turn_credential:
-        return [
-            {"urls": ["stun:stun.l.google.com:19302"]},
-            {
-                "urls": [turn_url],
-                "username": turn_username,
-                "credential": turn_credential
-            }
-        ]
+    # 1. Try User's Metered.ca API Key directly (Hardcoded for maximum reliability)
+    try:
+        url = "https://nameplaterecognition.metered.live/api/v1/turn/credentials?apiKey=3864c807ed0de6643f30d13eec4152d89894"
+        res = requests.get(url)
+        if res.status_code == 200:
+            return res.json()
+    except Exception as e:
+        print(f"Failed to fetch Metered TURN servers: {e}")
+
+    # 2. Try Direct TURN Credentials
 
     # 2. Try Metered.ca API Key method
     metered_app = os.environ.get("METERED_APP_NAME")
