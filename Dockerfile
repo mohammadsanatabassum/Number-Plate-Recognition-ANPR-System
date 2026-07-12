@@ -16,21 +16,22 @@ ENV HOME=/home/user \
 
 WORKDIR $HOME/app
 
-# Install all Python dependencies
+# Install all Python dependencies (as root)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Force opencv-python-headless LAST so ultralytics cannot overwrite it
 RUN pip install --no-cache-dir --force-reinstall opencv-python-headless
 
-# Copy application files with user ownership
-COPY --chown=user . $HOME/app
+# Pre-download YOLOv8n weights as root (root can write to WORKDIR)
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); print('YOLOv8n weights cached.')"
+
+# Copy application files then give full ownership of the entire app dir to user
+COPY . $HOME/app
+RUN chown -R user:user $HOME/app && chown -R user:user $HOME/.cache 2>/dev/null || true
 
 # Switch to non-root user
 USER user
-
-# Pre-download YOLOv8n weights during BUILD (not runtime) under user ownership
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); print('YOLOv8n weights cached.')"
 
 EXPOSE 7860
 
