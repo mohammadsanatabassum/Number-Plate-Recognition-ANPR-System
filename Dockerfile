@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb1 \
     libxext6 \
     libx11-6 \
+    libsrtp2-1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up user 1000
