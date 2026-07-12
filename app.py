@@ -57,21 +57,19 @@ def get_ice_servers():
     # 1. Try User's Metered.ca API Key directly (Hardcoded for maximum reliability)
     try:
         url = "https://nameplaterecognition.metered.live/api/v1/turn/credentials?apiKey=3864c807ed0de6643f30d13eec4152d89894"
-        res = requests.get(url)
+        res = requests.get(url, timeout=5)
         if res.status_code == 200:
             return res.json()
     except Exception as e:
         print(f"Failed to fetch Metered TURN servers: {e}")
 
-    # 2. Try Direct TURN Credentials
-
-    # 2. Try Metered.ca API Key method
+    # 2. Try Metered.ca API Key from environment
     metered_app = os.environ.get("METERED_APP_NAME")
     metered_api = os.environ.get("METERED_API_KEY")
     if metered_app and metered_api:
         try:
             url = f"https://{metered_app}.metered.live/api/v1/turn/credentials?apiKey={metered_api}"
-            res = requests.get(url)
+            res = requests.get(url, timeout=5)
             if res.status_code == 200:
                 return res.json()
         except Exception as e:
@@ -110,9 +108,15 @@ def get_ice_servers():
         }
     ]
 
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": get_ice_servers()}
-)
+try:
+    RTC_CONFIGURATION = RTCConfiguration(
+        {"iceServers": get_ice_servers()}
+    )
+except Exception as e:
+    print(f"Failed to build RTC config, using basic STUN fallback: {e}")
+    RTC_CONFIGURATION = RTCConfiguration(
+        {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    )
 
 class VideoProcessor(VideoProcessorBase):
     def __init__(self):
