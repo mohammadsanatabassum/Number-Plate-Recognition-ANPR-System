@@ -1,5 +1,6 @@
 streamlit>=1.36.0
 easyocr
+opencv-python-headless
 torch --index-url https://download.pytorch.org/whl/cpu
 torchvision --index-url https://download.pytorch.org/whl/cpu
 Pillow

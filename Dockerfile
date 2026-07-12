@@ -9,7 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-6 \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Set up user 1000
+RUN useradd -m -u 1000 user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
+
+WORKDIR $HOME/app
 
 # Install all Python dependencies
 COPY requirements.txt .
@@ -18,12 +23,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Force opencv-python-headless LAST so ultralytics cannot overwrite it
 RUN pip install --no-cache-dir --force-reinstall opencv-python-headless
 
-# Pre-download YOLOv8n weights during BUILD (not runtime) so first user request is instant
-# yolov8n.pt is the standard public Ultralytics model (~6MB), no authentication required
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); print('YOLOv8n weights cached.')"
+# Copy application files with user ownership
+COPY --chown=user . $HOME/app
 
-# Copy application files
-COPY . .
+# Switch to non-root user
+USER user
+
+# Pre-download YOLOv8n weights during BUILD (not runtime) under user ownership
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); print('YOLOv8n weights cached.')"
 
 EXPOSE 7860
 
