@@ -36,7 +36,7 @@ def display_result(cropped_img, text, accuracy, original_frame=None):
     col1, col2 = st.columns(2)
     with col1:
         display = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB) if len(cropped_img.shape) == 3 else cropped_img
-        st.image(display, caption="Cropped Plate Region", use_container_width=True)
+        st.image(display, caption="Cropped Plate Region", width="stretch")
     with col2:
         img_to_save = original_frame if original_frame is not None else cropped_img
         img_filename = f"captures/{text}_{uuid.uuid4().hex[:6]}.jpg"
@@ -195,7 +195,7 @@ def main():
             detector = load_detector()
             file_bytes = np.asarray(bytearray(uploaded_img.read()), dtype=np.uint8)
             frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-            st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), caption="Uploaded Image", use_container_width=True)
+            st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), caption="Uploaded Image", width="stretch")
 
             with st.spinner("🔍 Running YOLOv8 + EasyOCR..."):
                 crop, text, accuracy = detector.detect_and_read_plate(frame)
